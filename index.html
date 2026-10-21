@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="application-name" content="PackList" />
+  <title>PackList — Reusable Checklist</title>
+
+  <!-- Inline High-Contrast SVG App Icon -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='112' fill='%23000000'/%3E%3Crect x='24' y='24' width='464' height='464' rx='92' fill='none' stroke='%2327272A' stroke-width='16'/%3E%3Crect x='96' y='120' width='320' height='48' rx='24' fill='%2327272A'/%3E%3Crect x='96' y='120' width='220' height='48' rx='24' fill='%23EF4444'/%3E%3Ccircle cx='316' cy='144' r='24' fill='%23F59E0B'/%3E%3Cpath d='M136 268 L184 316 L276 224' stroke='%23EF4444' stroke-width='36' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Cline x1='328' y1='272' x2='400' y2='272' stroke='%23FFFFFF' stroke-width='32' stroke-linecap='round'/%3E%3Cpath d='M136 376 L184 424 L276 332' stroke='%23F59E0B' stroke-width='36' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Cline x1='328' y1='380' x2='400' y2='380' stroke='%2371717A' stroke-width='32' stroke-linecap='round'/%3E%3C/svg%3E" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * {
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+    body {
+      background-color: #000000;
+      color: #FFFFFF;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overscroll-behavior-y: none;
+      padding-bottom: env(safe-area-inset-bottom, 24px);
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #09090B;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #27272A;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-black text-white selection:bg-red-600 selection:text-white">
+
+  <!-- Sticky Top Header -->
+  <header class="sticky top-0 z-30 bg-black/95 backdrop-blur-md border-b border-zinc-800 px-3 pt-3 pb-3.5 sm:px-6">
+    <div class="max-w-5xl mx-auto flex flex-col gap-3">
+      
+      <!-- Top Row: App Title, Storage Status & Quick Actions -->
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2.5">
+          <div class="w-3 h-3 rounded-full bg-red-500 ring-4 ring-red-500/20"></div>
+          <h1 class="text-base sm:text-lg font-extrabold tracking-wider uppercase text-white">PackList</h1>
+          <span id="storageBadge" class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-zinc-900 text-zinc-400 border border-zinc-800">Local</span>
+        </div>
+
+        <div class="flex items-center gap-1.5 sm:gap-2">
+          <button id="hidePackedBtn" onclick="toggleHidePacked()" class="min-h-[38px] px-3 rounded-lg text-xs font-bold border transition-all flex items-center gap-1.5 bg-zinc-900 border-zinc-700 text-zinc-300">
+            <span id="hidePackedLabel">Hide Packed</span>
+          </button>
+          <button onclick="resetTrip()" class="min-h-[38px] px-3 rounded-lg text-xs font-bold border border-red-500/60 bg-zinc-900 text-red-400 active:bg-red-950 transition-all">
+            New Trip ↺
+          </button>
+          <button onclick="openBackupModal()" class="min-h-[38px] px-2.5 rounded-lg text-xs font-mono font-bold border border-zinc-700 bg-zinc-900 text-amber-400 active:bg-zinc-800 transition-all" title="Backup / Restore">
+            ⇄ Sync
+          </button>
+        </div>
+      </div>
+
+      <!-- Second Row: Trip Mode Selector Pills -->
+      <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5" id="modePillsContainer"></div>
+
+      <!-- Third Row: High-Contrast Completion Bar -->
+      <div class="bg-[#121214] border border-zinc-800 rounded-xl p-3">
+        <div class="flex items-baseline justify-between mb-2">
+          <span class="text-xs font-bold tracking-widest uppercase text-zinc-400">Completion</span>
+          <span id="progressStats" class="font-mono text-sm sm:text-base font-extrabold text-amber-400">0% (0/0)</span>
+        </div>
+        <div class="w-full h-3.5 bg-zinc-800 rounded-full overflow-hidden p-0.5">
+          <div id="progressBarFill" class="h-full rounded-full transition-all duration-300 ease-out" style="width: 0%; background: linear-gradient(90deg, #EF4444 0%, #F59E0B 100%);"></div>
+        </div>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- Main Category Grid -->
+  <main class="max-w-5xl mx-auto px-3 py-4 sm:px-6">
+    <div id="categoriesGrid" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+  </main>
+
+  <!-- Undo Toast Banner -->
+  <div id="undoToast" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-40 hidden items-center gap-4 bg-zinc-900 border border-amber-500/60 text-white px-4 py-3 rounded-xl shadow-2xl">
+    <span id="undoMessage" class="text-xs sm:text-sm font-medium text-zinc-200">Trip reset.</span>
+    <button onclick="undoLastAction()" class="text-xs font-extrabold uppercase tracking-wider px-3 py-1.5 rounded-lg bg-amber-500 text-black active:bg-amber-400">
+      Undo
+    </button>
+  </div>
+
+  <!-- Backup / Clipboard Sync Modal -->
+  <div id="backupModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/85 backdrop-blur-sm p-4">
+    <div class="bg-[#121214] border border-zinc-800 rounded-2xl max-w-lg w-full p-5 flex flex-col gap-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-zinc-800 pb-3">
+        <div>
+          <h2 class="text-base font-extrabold uppercase tracking-wider text-white">Backup &amp; Restore</h2>
+          <p class="text-xs text-zinc-400 mt-0.5">Copy string to Google Keep/Notes or export a JSON file</p>
+        </div>
+        <button onclick="closeBackupModal()" class="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-400 font-bold">✕</button>
+      </div>
+
+      <!-- One-Tap Clipboard Copy / Paste -->
+      <div class="flex flex-col gap-2">
+        <label class="text-xs font-mono uppercase text-amber-400 font-bold">1. Fast Mobile Clipboard String</label>
+        <textarea id="backupTextarea" rows="4" class="w-full bg-black border border-zinc-800 rounded-lg p-2.5 text-xs font-mono text-zinc-300 focus:outline-none focus:border-amber-500" placeholder="Paste backup string here to restore..."></textarea>
+        <div class="grid grid-cols-2 gap-2">
+          <button onclick="copyBackupString()" id="copyStringBtn" class="min-h-[42px] rounded-lg bg-red-600 text-white font-bold text-xs uppercase tracking-wider active:bg-red-700">
+            Copy State String
+          </button>
+          <button onclick="restoreFromString()" class="min-h-[42px] rounded-lg bg-zinc-900 border border-amber-500/60 text-amber-400 font-bold text-xs uppercase tracking-wider active:bg-zinc-800">
+            Load From Textbox
+          </button>
+        </div>
+      </div>
+
+      <!-- File Export / Import & Factory Reset -->
+      <div class="flex flex-col gap-2 pt-2 border-t border-zinc-800">
+        <label class="text-xs font-mono uppercase text-zinc-400 font-bold">2. File Backup &amp; Factory Reset</label>
+        <div class="grid grid-cols-3 gap-2">
+          <button onclick="downloadJsonBackup()" class="min-h-[40px] rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-200 font-semibold text-xs">
+            Export .JSON
+          </button>
+          <label class="min-h-[40px] rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-200 font-semibold text-xs flex items-center justify-center cursor-pointer">
+            Import .JSON
+            <input type="file" accept=".json" onchange="importJsonFile(event)" class="hidden" />
+          </label>
+          <button onclick="factoryReset()" class="min-h-[40px] rounded-lg bg-zinc-950 border border-red-900/60 text-red-500 font-semibold text-xs">
+            Factory Defaults
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- 1. PWA Manifest & Persistent Storage Lock ---
+    (function initPWAAndStorage() {
+      const manifest = {
+        name: "PackList — Reusable Vacation Checklist",
+        short_name: "PackList",
+        start_url: ".",
+        display: "standalone",
+        background_color: "#000000",
+        theme_color: "#000000",
+        icons: [{
+          src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='112' fill='%23000000'/%3E%3Crect x='24' y='24' width='464' height='464' rx='92' fill='none' stroke='%23EF4444' stroke-width='20'/%3E%3Cpath d='M136 268 L184 316 L276 224' stroke='%23EF4444' stroke-width='40' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Cline x1='328' y1='272' x2='400' y2='272' stroke='%23F59E0B' stroke-width='36' stroke-linecap='round'/%3E%3C/svg%3E",
+          sizes: "512x512",
+          type: "image/svg+xml",
+          purpose: "any maskable"
+        }]
+      };
+      const blob = new Blob([JSON.stringify(manifest)], { type: "application/json" });
+      const link = document.createElement("link");
+      link.rel = "manifest";
+      link.href = URL.createObjectURL(blob);
+      document.head.appendChild(link);
+
+      if (navigator.storage && navigator.storage.persist) {
+        navigator.storage.persist().then((persistent) => {
+          const badge = document.getElementById("storageBadge");
+          if (persistent && badge) {
+            badge.textContent = "Locked ★";
+            badge.className = "text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-zinc-900 text-amber-400 border border-amber-500/40";
+            badge.title = "Android OS storage eviction lock active";
+          }
+        });
+      }
+    })();
+
+    // --- 2. Master Categories & Default Indian Travel Dataset ---
+    const STORAGE_KEY = "packlist_master_v2";
+    const MODES = [
+      { id: "Base", label: "Base (Always)" },
+      { id: "Flight", label: "Flight" },
+      { id: "Trek", label: "Trek / Outdoor" },
+      { id: "Work", label: "Work" }
+    ];
+
+    const CATEGORIES = [
+      { id: "docs", title: "Documents & Finance" },
+      { id: "tech", title: "Electronics & Power" },
+      { id: "apparel", title: "Apparel & Footwear" },
+      { id: "health", title: "Toiletries & First-Aid" },
+      { id: "gear", title: "Gear & Miscellaneous" }
+    ];
+
+    const DEFAULT_ITEMS = [
+      // Documents & Finance
+      { id: "d1", cat: "docs", text: "Original Aadhaar / Govt ID + DigiLocker", mode: "Base", packed: false },
+      { id: "d2", cat: "docs", text: "Emergency Cash (₹2,000 - ₹5,000 in ₹100/₹500)", mode: "Base", packed: false },
+      { id: "d3", cat: "docs", text: "Credit / Debit Cards & House Keys", mode: "Base", packed: false },
+      { id: "d4", cat: "docs", text: "Boarding Pass / DigiYatra & Offline Hotel PDFs", mode: "Flight", packed: false },
+      { id: "d5", cat: "docs", text: "Printed Trek Permits & ID Photocopies (3x)", mode: "Trek", packed: false },
+      // Electronics & Power
+      { id: "t1", cat: "tech", text: "Pixel 10 Pro + Fast Type-C Cable", mode: "Base", packed: false },
+      { id: "t2", cat: "tech", text: "65W GaN Fast Charger Adapter", mode: "Base", packed: false },
+      { id: "t3", cat: "tech", text: "TWS Earbuds + Charging Case", mode: "Base", packed: false },
+      { id: "t4", cat: "tech", text: "10000mAh Power Bank (Strictly in Cabin Bag)", mode: "Flight", packed: false },
+      { id: "t5", cat: "tech", text: "Headlamp / Torch + Spare Batteries", mode: "Trek", packed: false },
+      { id: "t6", cat: "tech", text: "Laptop + Charger + Wireless Keyboard/Mouse", mode: "Work", packed: false },
+      // Apparel & Footwear
+      { id: "a1", cat: "apparel", text: "Daily T-Shirts, Trousers & Shorts", mode: "Base", packed: false },
+      { id: "a2", cat: "apparel", text: "Undergarments, Socks & Nightwear", mode: "Base", packed: false },
+      { id: "a3", cat: "apparel", text: "Light Layer / Hoodie for AC Cabin", mode: "Flight", packed: false },
+      { id: "a4", cat: "apparel", text: "Quick-Dry Trek Pants, Fleece & Rain Poncho", mode: "Trek", packed: false },
+      { id: "a5", cat: "apparel", text: "High-Grip Trekking Shoes + Extra Dry Socks", mode: "Trek", packed: false },
+      { id: "a6", cat: "apparel", text: "Collared Shirt / Smart Casuals", mode: "Work", packed: false },
+      // Toiletries & First-Aid
+      { id: "h1", cat: "health", text: "Toothbrush, Toothpaste, Deodorant & Facewash", mode: "Base", packed: false },
+      { id: "h2", cat: "health", text: "Sunscreen SPF 50+ & Lip Balm", mode: "Base", packed: false },
+      { id: "h3", cat: "health", text: "Paracetamol, Antacid, Band-Aids & ORS Sachets", mode: "Base", packed: false },
+      { id: "h4", cat: "health", text: "Liquids Under 100ml in Clear Resealable Pouch", mode: "Flight", packed: false },
+      { id: "h5", cat: "health", text: "Odomos Mosquito Repellent, Crepe Bandage & Blister Tape", mode: "Trek", packed: false },
+      // Gear & Misc
+      { id: "g1", cat: "gear", text: "Sunglasses & Reusable Water Bottle", mode: "Base", packed: false },
+      { id: "g2", cat: "gear", text: "Polybag for Laundry / Wet Clothes", mode: "Base", packed: false },
+      { id: "g3", cat: "gear", text: "Luggage Tag & Cabin Lock", mode: "Flight", packed: false },
+      { id: "g4", cat: "gear", text: "Daypack (20-30L) with Waterproof Rain Cover", mode: "Trek", packed: false },
+      { id: "g5", cat: "gear", text: "Trail Mix (Almonds, Cashews, Seeds) & Energy Bars", mode: "Trek", packed: false },
+      { id: "g6", cat: "gear", text: "Corporate ID Badge & Access Token", mode: "Work", packed: false }
+    ];
+
+    // --- 3. Application State ---
+    let state = loadState();
+    let undoSnapshot = null;
+    let undoTimer = null;
+    // Per-category draft mode selection for new items
+    let quickAddModes = { docs: "Base", tech: "Base", apparel: "Base", health: "Base", gear: "Base" };
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed.items) && Array.isArray(parsed.activeModes)) {
+            return parsed;
+          }
+        }
+      } catch (e) {
+        console.error("Failed to read state:", e);
+      }
+      return {
+        activeModes: ["Base", "Flight"],
+        hidePacked: false,
+        items: JSON.parse(JSON.stringify(DEFAULT_ITEMS))
+      };
+    }
+
+    function saveState() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch (e) {
+        console.error("Failed to save state:", e);
+      }
+    }
+
+    // --- 4. Core Mutations ---
+    function toggleMode(modeId) {
+      const idx = state.activeModes.indexOf(modeId);
+      if (idx > -1) {
+        if (state.activeModes.length === 1) return; // Keep at least 1 mode active
+        state.activeModes.splice(idx, 1);
+      } else {
+        state.activeModes.push(modeId);
+      }
+      saveState();
+      render();
+    }
+
+    function toggleHidePacked() {
+      state.hidePacked = !state.hidePacked;
+      saveState();
+      render();
+    }
+
+    function toggleItem(itemId) {
+      const item = state.items.find((i) => i.id === itemId);
+      if (item) {
+        item.packed = !item.packed;
+        saveState();
+        render();
+      }
+    }
+
+    function cycleItemMode(itemId, event) {
+      event.stopPropagation();
+      const item = state.items.find((i) => i.id === itemId);
+      if (!item) return;
+      const modeIds = MODES.map((m) => m.id);
+      const nextIdx = (modeIds.indexOf(item.mode) + 1) % modeIds.length;
+      item.mode = modeIds[nextIdx];
+      if (!state.activeModes.includes(item.mode)) {
+        state.activeModes.push(item.mode);
+      }
+      saveState();
+      render();
+    }
+
+    function deleteItem(itemId, event) {
+      event.stopPropagation();
+      saveUndoSnapshot("Item removed.");
+      state.items = state.items.filter((i) => i.id !== itemId);
+      saveState();
+      render();
+    }
+
+    function cycleQuickAddMode(catId) {
+      const modeIds = MODES.map((m) => m.id);
+      const curr = quickAddModes[catId] || "Base";
+      const next = modeIds[(modeIds.indexOf(curr) + 1) % modeIds.length];
+      quickAddModes[catId] = next;
+      const btn = document.getElementById(`qa-mode-${catId}`);
+      if (btn) btn.textContent = next;
+    }
+
+    function handleQuickAddKey(event, catId) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        addQuickItem(catId);
+      }
+    }
+
+    function addQuickItem(catId) {
+      const input = document.getElementById(`qa-input-${catId}`);
+      if (!input) return;
+      const text = input.value.trim();
+      if (!text) return;
+      const chosenMode = quickAddModes[catId] || "Base";
+      state.items.push({
+        id: "item_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+        cat: catId,
+        text: text,
+        mode: chosenMode,
+        packed: false
+      });
+      if (!state.activeModes.includes(chosenMode)) {
+        state.activeModes.push(chosenMode);
+      }
+      input.value = "";
+      saveState();
+      render();
+      const refreshedInput = document.getElementById(`qa-input-${catId}`);
+      if (refreshedInput) refreshedInput.focus();
+    }
+
+    function resetTrip() {
+      const anyPacked = state.items.some((i) => i.packed);
+      if (!anyPacked) return;
+      saveUndoSnapshot("All checkmarks cleared for new trip.");
+      state.items.forEach((i) => (i.packed = false));
+      state.hidePacked = false;
+      saveState();
+      render();
+    }
+
+    function saveUndoSnapshot(msg) {
+      undoSnapshot = JSON.parse(JSON.stringify(state));
+      const toast = document.getElementById("undoToast");
+      const label = document.getElementById("undoMessage");
+      if (toast && label) {
+        label.textContent = msg;
+        toast.classList.remove("hidden");
+        toast.classList.add("flex");
+        clearTimeout(undoTimer);
+        undoTimer = setTimeout(() => {
+          toast.classList.add("hidden");
+          toast.classList.remove("flex");
+        }, 5000);
+      }
+    }
+
+    function undoLastAction() {
+      if (!undoSnapshot) return;
+      state = undoSnapshot;
+      undoSnapshot = null;
+      saveState();
+      render();
+      const toast = document.getElementById("undoToast");
+      if (toast) {
+        toast.classList.add("hidden");
+        toast.classList.remove("flex");
+      }
+    }
+
+    // --- 5. Backup / Sync Modal Helpers ---
+    function openBackupModal() {
+      const modal = document.getElementById("backupModal");
+      const textarea = document.getElementById("backupTextarea");
+      if (modal && textarea) {
+        textarea.value = JSON.stringify(state);
+        modal.classList.remove("hidden");
+        modal.classList.add("flex");
+      }
+    }
+
+    function closeBackupModal() {
+      const modal = document.getElementById("backupModal");
+      if (modal) {
+        modal.classList.add("hidden");
+        modal.classList.remove("flex");
+      }
+    }
+
+    function copyBackupString() {
+      const textarea = document.getElementById("backupTextarea");
+      const btn = document.getElementById("copyStringBtn");
+      if (!textarea) return;
+      textarea.value = JSON.stringify(state);
+      navigator.clipboard.writeText(textarea.value).then(() => {
+        const orig = btn.textContent;
+        btn.textContent = "✓ Copied to Clipboard";
+        setTimeout(() => (btn.textContent = orig), 2000);
+      });
+    }
+
+    function restoreFromString() {
+      const textarea = document.getElementById("backupTextarea");
+      if (!textarea || !textarea.value.trim()) return;
+      try {
+        const parsed = JSON.parse(textarea.value.trim());
+        if (Array.isArray(parsed.items) && Array.isArray(parsed.activeModes)) {
+          state = parsed;
+          saveState();
+          render();
+          closeBackupModal();
+        } else {
+          alert("Invalid backup string structure.");
+        }
+      } catch (e) {
+        alert("Could not parse JSON backup string.");
+      }
+    }
+
+    function downloadJsonBackup() {
+      const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `packlist-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+    }
+
+    function importJsonFile(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          if (Array.isArray(parsed.items) && Array.isArray(parsed.activeModes)) {
+            state = parsed;
+            saveState();
+            render();
+            closeBackupModal();
+          }
+        } catch (err) {
+          alert("Invalid JSON file.");
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function factoryReset() {
+      if (!confirm("Restore default Indian travel master list? Custom items will be overwritten.")) return;
+      state = {
+        activeModes: ["Base", "Flight"],
+        hidePacked: false,
+        items: JSON.parse(JSON.stringify(DEFAULT_ITEMS))
+      };
+      saveState();
+      render();
+      closeBackupModal();
+    }
+
+    // --- 6. Render Engine ---
+    function escapeHtml(str) {
+      return str.replace(/[&<>"']/g, (m) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      }[m]));
+    }
+
+    function render() {
+      // 1. Render Mode Pills
+      const pillsContainer = document.getElementById("modePillsContainer");
+      pillsContainer.innerHTML = MODES.map((m) => {
+        const active = state.activeModes.includes(m.id);
+        const count = state.items.filter((i) => i.mode === m.id).length;
+        if (active) {
+          const isBase = m.id === "Base";
+          const bgClass = isBase
+            ? "bg-red-600 text-white border-red-500"
+            : "bg-amber-500 text-black border-amber-400";
+          return `
+            <button onclick="toggleMode('${m.id}')" class="min-h-[34px] px-3.5 rounded-full text-xs font-extrabold tracking-wide border transition-all flex items-center gap-1.5 shrink-0 ${bgClass}">
+              <span>✓ ${m.label}</span>
+              <span class="opacity-80 font-mono text-[11px]">(${count})</span>
+            </button>
+          `;
+        } else {
+          return `
+            <button onclick="toggleMode('${m.id}')" class="min-h-[34px] px-3.5 rounded-full text-xs font-semibold border border-zinc-800 bg-[#121214] text-zinc-400 active:bg-zinc-800 transition-all flex items-center gap-1.5 shrink-0">
+              <span>+ ${m.label}</span>
+              <span class="opacity-60 font-mono text-[11px]">(${count})</span>
+            </button>
+          `;
+        }
+      }).join("");
+
+      // 2. Update Hide Packed Button State
+      const hideBtn = document.getElementById("hidePackedBtn");
+      const hideLabel = document.getElementById("hidePackedLabel");
+      if (state.hidePacked) {
+        hideBtn.className = "min-h-[38px] px-3 rounded-lg text-xs font-extrabold border transition-all flex items-center gap-1.5 bg-amber-500 border-amber-400 text-black";
+        hideLabel.textContent = "Showing Unpacked";
+      } else {
+        hideBtn.className = "min-h-[38px] px-3 rounded-lg text-xs font-bold border transition-all flex items-center gap-1.5 bg-zinc-900 border-zinc-700 text-zinc-300";
+        hideLabel.textContent = "Hide Packed";
+      }
+
+      // 3. Calculate Overall Progress for Active Modes
+      const activeItems = state.items.filter((i) => state.activeModes.includes(i.mode));
+      const totalCount = activeItems.length;
+      const packedCount = activeItems.filter((i) => i.packed).length;
+      const pct = totalCount === 0 ? 0 : Math.round((packedCount / totalCount) * 100);
+
+      document.getElementById("progressStats").textContent = `${pct}% (${packedCount}/${totalCount} PACKED)`;
+      document.getElementById("progressBarFill").style.width = `${pct}%`;
+
+      // 4. Render Category Cards
+      const grid = document.getElementById("categoriesGrid");
+      grid.innerHTML = CATEGORIES.map((cat) => {
+        const catActiveItems = activeItems.filter((i) => i.cat === cat.id);
+        const catTotal = catActiveItems.length;
+        const catPacked = catActiveItems.filter((i) => i.packed).length;
+        const catPct = catTotal === 0 ? 0 : Math.round((catPacked / catTotal) * 100);
+
+        const visibleItems = state.hidePacked
+          ? catActiveItems.filter((i) => !i.packed)
+          : catActiveItems;
+
+        const defaultNewMode = quickAddModes[cat.id] || state.activeModes[state.activeModes.length - 1] || "Base";
+        quickAddModes[cat.id] = defaultNewMode;
+
+        const rowsHtml = visibleItems.length === 0
+          ? `<div class="py-6 text-center text-xs font-mono uppercase text-zinc-600">
+               ${catTotal > 0 && state.hidePacked ? "✓ All items packed in this category" : "No items for active mode"}
+             </div>`
+          : visibleItems.map((item) => {
+              const badgeColor = item.mode === "Base"
+                ? "border-zinc-700 text-zinc-400 bg-zinc-900"
+                : "border-amber-500/40 text-amber-400 bg-amber-950/30";
+              return `
+                <div onclick="toggleItem('${item.id}')" class="group flex items-center justify-between gap-2.5 py-2.5 px-2 rounded-lg hover:bg-zinc-900/70 active:bg-zinc-900 cursor-pointer select-none border-b border-zinc-900 last:border-b-0">
+                  <div class="flex items-center gap-3 min-w-0 flex-1">
+                    <div class="w-6 h-6 rounded-md flex items-center justify-center shrink-0 transition-colors ${
+                      item.packed
+                        ? "bg-red-600 border border-red-500"
+                        : "bg-zinc-950 border-2 border-zinc-600"
+                    }">
+                      ${item.packed ? `<svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>` : ""}
+                    </div>
+                    <span class="text-sm sm:text-[15px] leading-snug break-words ${
+                      item.packed ? "line-through text-zinc-500" : "text-zinc-100 font-medium"
+                    }">${escapeHtml(item.text)}</span>
+                  </div>
+
+                  <div class="flex items-center gap-1.5 shrink-0">
+                    <button onclick="cycleItemMode('${item.id}', event)" title="Tap to switch mode" class="px-2 py-1 rounded text-[10px] font-mono font-bold uppercase border ${badgeColor}">
+                      ${item.mode}
+                    </button>
+                    <button onclick="deleteItem('${item.id}', event)" title="Delete item" class="w-7 h-7 rounded flex items-center justify-center text-zinc-600 hover:text-red-400 active:text-red-500 font-bold text-xs">
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              `;
+            }).join("");
+
+        return `
+          <section class="bg-[#121214] border border-zinc-800 rounded-xl p-3.5 flex flex-col justify-between">
+            <div>
+              <!-- Category Header & Mini Progress -->
+              <div class="flex items-center justify-between mb-2">
+                <h2 class="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-amber-400">${cat.title}</h2>
+                <span class="font-mono text-xs font-bold ${catPacked === catTotal && catTotal > 0 ? "text-red-400" : "text-zinc-400"}">${catPacked}/${catTotal}</span>
+              </div>
+              <div class="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden mb-3">
+                <div class="h-full bg-red-600 transition-all duration-300" style="width: ${catPct}%"></div>
+              </div>
+
+              <!-- Checklist Items -->
+              <div class="divide-y divide-zinc-900/60">
+                ${rowsHtml}
+              </div>
+            </div>
+
+            <!-- Zero-Friction Inline Quick Add -->
+            <div class="mt-3 pt-2.5 border-t border-zinc-800/80 flex items-center gap-1.5">
+              <input
+                id="qa-input-${cat.id}"
+                type="text"
+                 onkeydown="handleQuickAddKey(event, '${cat.id}')"
+                placeholder="+ Add item..."
+                class="min-h-[38px] flex-1 min-w-0 bg-black border border-zinc-800 rounded-lg px-3 text-xs sm:text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-red-500"
+              />
+              <button
+                id="qa-mode-${cat.id}"
+                type="button"
+                onclick="cycleQuickAddMode('${cat.id}')"
+                title="Mode for new item (tap to cycle)"
+                class="min-h-[38px] px-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-[11px] font-mono font-bold uppercase text-amber-400 shrink-0"
+              >${defaultNewMode}</button>
+              <button
+                type="button"
+                onclick="addQuickItem('${cat.id}')"
+                class="min-h-[38px] px-3 rounded-lg bg-red-600 active:bg-red-700 text-white font-extrabold text-xs uppercase shrink-0"
+              >Add</button>
+            </div>
+          </section>
+        `;
+      }).join("");
+    }
+
+    // Boot App
+    render();
+  </script>
+</body>
+</html>
